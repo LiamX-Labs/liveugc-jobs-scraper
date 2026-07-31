@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LiveUGC jobs scraper</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --line: #262b36;
+    --text: #e7eaf0;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    padding: 28px 20px 16px;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px 60px; }
+  #q {
+    width: 100%;
+    padding: 11px 14px;
+    margin: 14px 0 20px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 15px;
+  }
+  #q:focus { outline: none; border-color: var(--accent); }
+  .job {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .job h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .tag {
+    font-size: 12px;
+    color: var(--muted);
+    background: #1e2230;
+    border: 1px solid var(--line);
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+  .tag.pay { color: #8be2b0; border-color: #234634; }
+  .desc { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .date { color: var(--muted); font-size: 12px; }
+  a.apply {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid #2c3a52;
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+  a.apply:hover { background: #1b2536; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>LiveUGC jobs scraper</h1>
+    <div class="meta" id="status">Loading…</div>
+  </header>
+  <div class="wrap">
+    <input id="q" type="search" placeholder="Filter by keyword, company, location, category…" autocomplete="off" />
+    <div id="list"></div>
+  </div>
+
+<script>
+let JOBS = [];
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
+  ));
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function card(j) {
+  const tags = [];
+  if (j.pay) tags.push(`<span class="tag pay">${esc(j.pay)}</span>`);
+  if (j.company) tags.push(`<span class="tag">${esc(j.company)}</span>`);
+  if (j.location) tags.push(`<span class="tag">${esc(j.location)}</span>`);
+  if (j.category) tags.push(`<span class="tag">${esc(j.category)}</span>`);
+  let desc = j.description || "";
+  if (desc.length > 300) desc = desc.slice(0, 300).trim() + "…";
+  const apply = j.apply_url
+    ? `<a class="apply" href="${esc(j.apply_url)}" target="_blank" rel="noopener noreferrer">View &amp; apply →</a>`
+    : `<span></span>`;
+  return `<div class="job">
+    <h2>${esc(j.title)}</h2>
+    <div class="tags">${tags.join("")}</div>
+    ${desc ? `<p class="desc">${esc(desc)}</p>` : ""}
+    <div class="foot"><span class="date">${esc(fmtDate(j.posted_at))}</span>${apply}</div>
+  </div>`;
+}
+
+function render(list) {
+  const el = document.getElementById("list");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">No matching jobs.</div>`;
+    return;
+  }
+  el.innerHTML = list.map(card).join("");
+}
+
+function applyFilter() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  if (!q) return render(JOBS);
+  const terms = q.split(/\s+/);
+  render(JOBS.filter(j => {
+    const hay = [j.title, j.company, j.location, j.category, j.description]
+      .filter(Boolean).join(" ").toLowerCase();
+    return terms.every(t => hay.includes(t));
+  }));
+}
+
+fetch("./data/jobs.json?_=" + Date.now())
+  .then(r => r.json())
+  .then(data => {
+    JOBS = data.jobs || [];
+    const upd = data.updated_at ? new Date(data.updated_at).toLocaleString() : "";
+    document.getElementById("status").textContent =
+      `${JOBS.length} jobs · newest first${upd ? " · updated " + upd : ""}`;
+    render(JOBS);
+    document.getElementById("q").addEventListener("input", applyFilter);
+  })
+  .catch(() => {
+    document.getElementById("status").textContent = "Could not load jobs.";
+  });
+</script>
+</body>
+</html>
