@@ -143,10 +143,10 @@ function applyFilter() {
 fetch("./data/jobs.json?_=" + Date.now())
   .then(r => r.json())
   .then(data => {
-    JOBS = data.jobs || [];
+    JOBS = (data.jobs || []).slice(0, 47);
     const upd = data.updated_at ? new Date(data.updated_at).toLocaleString() : "";
     document.getElementById("status").textContent =
-      `${JOBS.length} jobs · newest first${upd ? " · updated " + upd : ""}`;
+      `latest jobs ${JOBS.length} · newest first${upd ? " · updated " + upd : ""}`;
     render(JOBS);
     document.getElementById("q").addEventListener("input", applyFilter);
   })
